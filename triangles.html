@@ -113,104 +113,117 @@
         const adj = forceIntegerAreaInRange(base, ranges.bMin, ranges.bMax, height, ranges.hMin, ranges.hMax);
         base = adj.base; height = adj.height;
       }
-
-      const pxPerUnit = 7;
-      const Bpx = base * pxPerUnit;
-      const Hpx = height * pxPerUnit;
-
-      let margin = 20;
-      let width = Math.max(340, Bpx + margin*2);
-      const heightPx = 200;
-
-      // Base endpoints
-      let x0 = (width - Bpx)/2, y0 = heightPx - 30;
-      let x1 = x0 + Bpx, y1 = y0;
-
-      // Position apex and altitude foot
-      let ax, ay, footX, showBaseExtension = false, rightMarkerAt = null;
-
-      if (type === 'acute') {
-        // projection strictly inside base
-        let t = 0.2 + 0.6 * rng();
-        ax = x0 + t * Bpx;
-        ay = y0 - Hpx;
-
-        // nudge away from ~90° at apex
-        const vLx = x0 - ax, vLy = y0 - ay;
-        const vRx = x1 - ax, vRy = y1 - ay;
-        const dot = vLx*vRx + vLy*vRy;
-        const magL = Math.hypot(vLx, vLy), magR = Math.hypot(vRx, vRy);
-        if (Math.abs(dot) <= 0.02 * magL * magR) { ay -= 8; }
-
-        footX = ax;
-      } else if (type === 'right') {
-        // Right angle at left base endpoint; altitude overlaps vertical leg
-        ax = x0; ay = y0 - Hpx;
-        footX = x0;
-        rightMarkerAt = { x: x0, y: y0 };
-      } else if (type === 'obtuse') {
-        // Obtuse at right base endpoint by placing apex beyond x1
-        const dx = 0.25 + 0.45 * rng(); // 25%–70% beyond the base
-        ax = x1 + dx * Bpx;
-        ay = y0 - Hpx;
-        footX = ax; // projection outside segment
-        showBaseExtension = true;
-        // Expand canvas to fit apex and altitude
-        const extra = (ax + margin) - width;
-        if (extra > 0) width += extra;
-      }
-
       const area = 0.5 * base * height;
-
-      // Build SVG
-      const parts = [];
-      parts.push(`<svg viewBox="0 0 ${width} ${heightPx}" xmlns="http://www.w3.org/2000/svg" aria-label="Triangle diagram">`);
-
-      // Triangle polygon
-      parts.push(`<polygon points="${x0},${y0} ${x1},${y1} ${ax},${ay}" fill="#f7f9ff" stroke="#333" stroke-width="1.5"/>`);
-
-      // Base extension (for obtuse)
-      if (showBaseExtension) {
-        parts.push(`<line x1="${x1}" y1="${y1}" x2="${Math.max(footX, x1)+12}" y2="${y1}" stroke="#aaa" stroke-dasharray="6,5" />`);
-      }
-
-      // Altitude (dashed)
-      parts.push(`<line x1="${ax}" y1="${ay}" x2="${footX}" y2="${y0}" stroke="#555" stroke-dasharray="5,4" stroke-width="1.5"/>`);
-
-      // --- Right-angle marker: ONLY for right triangles ---
-      if (rightMarkerAt) {
-        const m = 12;
-        const rx = rightMarkerAt.x, ry = rightMarkerAt.y;
-        parts.push(
-          `<path d="M ${rx} ${ry} l 0 -${m} l ${m} 0 l 0 ${m} Z"
-             fill="none" stroke="#555" stroke-width="1.2"
-             stroke-linecap="square" stroke-linejoin="miter"/>`
-        );
-      }
-      /* No marker drawn for acute or obtuse triangles */
-
-      // ----- Dimension lines with TICKS (no arrows) -----
-      const tick = 6;
-
-      // Base dimension line + ticks
-      const dimY = y0 + 8;
-      parts.push(`<line x1="${x0}" y1="${dimY}" x2="${x1}" y2="${dimY}" stroke="#888" stroke-width="1"/>`);
-      parts.push(`<line x1="${x0}" y1="${dimY - tick}" x2="${x0}" y2="${dimY + tick}" stroke="#888" stroke-width="1"/>`);
-      parts.push(`<line x1="${x1}" y1="${dimY - tick}" x2="${x1}" y2="${dimY + tick}" stroke="#888" stroke-width="1"/>`);
-      parts.push(`<text x="${(x0+x1)/2}" y="${dimY + 14}" font-size="12" text-anchor="middle" fill="#222">b = ${base} cm</text>`);
-
-      // Height dimension line + ticks
-      const hx = footX - 8;
-      parts.push(`<line x1="${hx}" y1="${ay}" x2="${hx}" y2="${y0}" stroke="#888" stroke-width="1"/>`);
-      parts.push(`<line x1="${hx - tick}" y1="${ay}" x2="${hx + tick}" y2="${ay}" stroke="#888" stroke-width="1"/>`);
-      parts.push(`<line x1="${hx - tick}" y1="${y0}" x2="${hx + tick}" y2="${y0}" stroke="#888" stroke-width="1"/>`);
-      const labelX = Math.max(6, hx - 2);
-      parts.push(`<text x="${labelX}" y="${(ay+y0)/2}" font-size="12" text-anchor="end" dominant-baseline="middle" fill="#222">h = ${height} cm</text>`);
-
-      parts.push(`</svg>`);
-      const svg = parts.join("");
-
+      const svg = buildTriangleSVG(base, height, type, rng);
       return { base, height, area, svg, type };
+    }
+
+    function buildTriangleSVG(base, height, type, rng) {
+      const VW = 280, VH = 196;
+      const LPAD = 52, RPAD = 16, TPAD = 14, BPAD = 44;
+      const drawW = VW - LPAD - RPAD;   // 212px
+      const drawH = VH - TPAD - BPAD;   // 138px
+
+      // Obtuse apex overhangs the base by this fraction of the base width.
+      const obtuseOver = (type === 'obtuse') ? (0.18 + 0.20 * rng()) : 0;
+      const effectiveW = drawW / (1 + obtuseOver);
+      const scale = Math.min(effectiveW / base, drawH / height);
+      const bPx = base   * scale;
+      const hPx = height * scale;
+      const baseY = VH - BPAD;
+
+      // ── Position base endpoints and apex ──
+      let x0, x1, ax, ay, footX, towardBase;
+
+      if (type === 'right') {
+        // Right angle at the left base vertex; vertical leg is the altitude.
+        x0 = LPAD + (drawW - bPx) / 2;
+        x1 = x0 + bPx;
+        ax = x0;  ay = baseY - hPx;  footX = x0;
+
+      } else if (type === 'acute') {
+        x0 = LPAD + (drawW - bPx) / 2;
+        x1 = x0 + bPx;
+        const t = 0.28 + 0.44 * rng();
+        ax = x0 + t * bPx;  ay = baseY - hPx;  footX = ax;
+
+      } else {
+        // Obtuse — randomly flip which side the apex overhangs.
+        const flipLeft = rng() < 0.5;
+        if (flipLeft) {
+          // Apex to the LEFT of x0; anchor the right end of the base.
+          x1 = VW - RPAD;
+          x0 = x1 - bPx;
+          ax = x0 - obtuseOver * bPx;
+        } else {
+          // Apex to the RIGHT of x1; anchor the left end of the base.
+          x0 = LPAD;
+          x1 = x0 + bPx;
+          ax = x1 + obtuseOver * bPx;
+        }
+        ay = baseY - hPx;  footX = ax;
+        // Direction from the foot back toward the triangle base (used for square + label).
+        towardBase = flipLeft ? 1 : -1;
+      }
+
+      const p = [];
+      p.push(`<svg viewBox="0 0 ${VW} ${VH}" xmlns="http://www.w3.org/2000/svg" aria-label="Triangle diagram">`);
+
+      // ── Triangle polygon ──
+      p.push(`<polygon points="${x0},${baseY} ${x1},${baseY} ${ax},${ay}"
+        fill="#eef2ff" stroke="#2d3748" stroke-width="1.5" stroke-linejoin="round"/>`);
+
+      if (type === 'right') {
+        // Corner marker at the right-angle vertex (bottom-left).
+        const m = 11;
+        p.push(`<polyline points="${x0},${baseY-m} ${x0+m},${baseY-m} ${x0+m},${baseY}"
+          fill="none" stroke="#555" stroke-width="1.3"/>`);
+        // h label on the left leg, in the left margin.
+        p.push(`<text x="${x0 - 8}" y="${(baseY + ay) / 2}"
+          font-size="12" text-anchor="end" dominant-baseline="middle" fill="#222">h = ${height} cm</text>`);
+
+      } else {
+        // ── Dashed altitude ──
+        p.push(`<line x1="${ax}" y1="${ay}" x2="${footX}" y2="${baseY}"
+          stroke="#666" stroke-dasharray="5,4" stroke-width="1.4"/>`);
+
+        // Base extension for obtuse (dashed, from the near base vertex outward to foot).
+        if (type === 'obtuse') {
+          const extFrom = towardBase > 0 ? x0 : x1;   // vertex closest to the foot
+          const extTo   = towardBase > 0 ? footX - 6 : footX + 6;
+          p.push(`<line x1="${extFrom}" y1="${baseY}" x2="${extTo}" y2="${baseY}"
+            stroke="#bbb" stroke-dasharray="5,4" stroke-width="1.2"/>`);
+        }
+
+        // ── Right-angle square at the altitude foot ──
+        // Opens toward the triangle interior (toward the base).
+        const m   = 9;
+        const dir = (type === 'obtuse') ? towardBase
+                                        : (footX <= (x0 + x1) / 2 ? 1 : -1);
+        p.push(`<polyline points="${footX},${baseY-m} ${footX+m*dir},${baseY-m} ${footX+m*dir},${baseY}"
+          fill="none" stroke="#555" stroke-width="1.3"/>`);
+
+        // ── h label — always sits between the foot and the near base vertex ──
+        // For obtuse this is toward the base (never toward the canvas edge).
+        // For acute this is on the side opposite the square.
+        const lblDir = (type === 'obtuse') ? towardBase : -dir;
+        const lblX   = footX + lblDir * 10;
+        const anchor = lblDir > 0 ? 'start' : 'end';
+        p.push(`<text x="${lblX}" y="${(ay + baseY) / 2}"
+          font-size="12" text-anchor="${anchor}" dominant-baseline="middle"
+          stroke="white" stroke-width="3" stroke-linejoin="round" paint-order="stroke"
+          fill="#222">h = ${height} cm</text>`);
+      }
+
+      // ── Base dimension line with tick marks ──
+      const tick = 5, dimY = baseY + 6;
+      p.push(`<line x1="${x0}" y1="${dimY}" x2="${x1}" y2="${dimY}" stroke="#888" stroke-width="1"/>`);
+      p.push(`<line x1="${x0}" y1="${dimY-tick}" x2="${x0}" y2="${dimY+tick}" stroke="#888" stroke-width="1"/>`);
+      p.push(`<line x1="${x1}" y1="${dimY-tick}" x2="${x1}" y2="${dimY+tick}" stroke="#888" stroke-width="1"/>`);
+      p.push(`<text x="${(x0+x1)/2}" y="${dimY+16}" font-size="12" text-anchor="middle" fill="#222">b = ${base} cm</text>`);
+
+      p.push(`</svg>`);
+      return p.join('');
     }
 
     function makeProblems(rng, allowed, n, ranges, wantIntegerArea) {
