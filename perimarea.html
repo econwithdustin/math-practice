@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Perimeter & Area – Mixed Practice (Rectangles & L‑Shapes)</title>
+  <meta name="description" content="Generate printable perimeter and area practice for rectangles and right‑angle L‑shapes. Seeded for reproducible sets with answer key and units." />
+  <style>
+    :root{
+      --bg:#0b1020; --card:#0f172a; --ink:#e5e7eb; --muted:#94a3b8; --line:#1f2937; --accent:#22d3ee; --chip:#111827;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(1200px 600px at 20% -10%, #12204a 0%, #0b1020 60%) fixed;color:var(--ink);font:16px/1.5 ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    header,main,footer{max-width:1000px;margin:0 auto;padding:16px 20px}
+    h1{font-size:clamp(22px,4vw,32px);margin:8px 0}
+    fieldset{border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0;background:linear-gradient(180deg, rgba(17,24,39,.8), rgba(15,23,42,.92))}
+    legend{color:var(--muted)}
+    label{display:flex;gap:8px;align-items:center;margin:6px 0;color:var(--ink)}
+    input[type="number"],input[type="text"]{background:rgba(15,23,42,.7);border:1px solid var(--line);border-radius:10px;color:var(--ink);padding:8px 10px;min-width:90px}
+    input[type="checkbox"]{transform:translateY(1px)}
+    .row{display:flex;flex-wrap:wrap;gap:16px}
+    button{padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:linear-gradient(135deg,#38bdf8,#22d3ee);color:#00111a;font-weight:700;cursor:pointer}
+    button.secondary{background:linear-gradient(135deg,#1e293b,#0f172a);color:var(--ink)}
+    .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin:16px 0}
+    .card{background:linear-gradient(180deg, rgba(17,24,39,.8), rgba(15,23,42,.92));border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:8px}
+    .meta{color:var(--muted);font-size:14px}
+    .answer{background:rgba(34,211,238,.08);border:1px dashed #155e75;border-radius:10px;padding:6px 8px;display:none}
+    .answer.show{display:block}
+    .gridline{stroke:#1f2937;stroke-dasharray:4 4}
+    .dim{font-size:12px;fill:#cbd5e1}
+    .dimline{stroke:#475569;marker-start:url(#arrow);marker-end:url(#arrow)}
+    .solid{stroke:#e5e7eb;fill:#0b1020}
+    .outer{stroke:#e5e7eb;fill:#0b1020}
+    .inner{stroke:#94a3b8;stroke-dasharray:4 4}
+
+    @media print{
+      body{background:white;color:black}
+      header,footer{display:none}
+      .card{break-inside:avoid}
+      .answer{display:block}
+      .meta{color:#333}
+      svg .outer, svg .solid{stroke:#000}
+      svg .inner{stroke:#666}
+      svg .dim{fill:#111}
+      svg .gridline{stroke:#ccc}
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Perimeter & Area – Mixed Practice</h1>
+  <p class="meta">Rectangles and right‑angle L‑shapes with labeled dimensions. Generate reproducible sets using a seed; print with answers.</p>
+
+  <form id="controls">
+    <fieldset>
+      <legend>Settings</legend>
+      <div class="row">
+        <label>Problems <input type="number" id="count" min="1" max="60" value="12"/></label>
+        <label>Max side <input type="number" id="maxSide" min="3" max="50" value="20"/></label>
+        <label>Units <input type="text" id="units" value="cm" /></label>
+        <label><input type="checkbox" id="includeL" checked /> Include L‑shapes</label>
+        <label><input type="checkbox" id="mixAP" checked /> Mix Area & Perimeter</label>
+        <label>Seed <input type="text" id="seed" placeholder="e.g. 731 or any text" /></label>
+      </div>
+      <div class="row">
+        <button type="button" id="generate">Generate</button>
+        <button type="button" class="secondary" id="print">Print</button>
+        <label><input type="checkbox" id="toggleAnswers"/> Show answers</label>
+      </div>
+    </fieldset>
+  </form>
+</header>
+
+<main>
+  <div id="problems" class="cards" aria-live="polite"></div>
+</main>
+
+<footer>
+  <p class="meta">Tip: use the same seed to recreate the same set later. Perimeter of an L‑shape created by cutting a rectangle is <code>P = 2(W+H) + 2(w+h)</code>; area is <code>A = W·H − w·h</code>.</p>
+</footer>
+
+<script>
+// --- Utilities: deterministic PRNG (mulberry32) and hash ---
+function xmur3(str){
+  let h = 1779033703 ^ str.length; for (let i=0;i<str.length;i++) {h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = (h<<13) | (h>>>19);} return function(){h = Math.imul(h ^ (h>>>16), 2246822507); h = Math.imul(h ^ (h>>>13), 3266489909); return (h ^= h>>>16) >>> 0;}
+}
+function mulberry32(a){ return function(){ var t = a += 0x6D2B79F5; t = Math.imul(t ^ t>>>15, t | 1); t ^= t + Math.imul(t ^ t>>>7, t | 61); return ((t ^ t>>>14) >>> 0) / 4294967296; } }
+function rngFromSeed(seedStr){ const seed = xmur3(String(seedStr||Date.now()))(); return mulberry32(seed); }
+function randInt(rng, min, max){ return Math.floor(rng() * (max - min + 1)) + min; }
+
+// --- Geometry generators ---
+function genRectangle(rng, maxSide){
+  const w = randInt(rng, 3, maxSide), h = randInt(rng, 3, maxSide);
+  return {type:'rect', W:w, H:h};
+}
+function genLShape(rng, maxSide){
+  // Base rectangle W x H, remove notch w x h at top-right
+  const W = randInt(rng, 8, maxSide+5); // slightly larger base
+  const H = randInt(rng, 8, maxSide+5);
+  const w = randInt(rng, 2, Math.max(2, Math.floor(W*0.6))); // ensure notch smaller
+  const h = randInt(rng, 2, Math.max(2, Math.floor(H*0.6)));
+  return {type:'L', W, H, w, h};
+}
+
+function computeMetrics(shape){
+  if(shape.type==='rect'){
+    const A = shape.W * shape.H;
+    const P = 2*(shape.W + shape.H);
+    return {A,P};
+  } else {
+    const A = shape.W*shape.H - shape.w*shape.h;
+    const P = 2*(shape.W + shape.H) + 2*(shape.w + shape.h);
+    return {A,P};
+  }
+}
+
+// --- SVG drawing helpers ---
+function svgForRect(shape, units){
+  const pad = 16, scale = 8; // pixels per unit
+  const Wpx = shape.W * scale, Hpx = shape.H * scale;
+  const w = Wpx, h = Hpx;
+  const width = w + pad*2 + 40, height = h + pad*2 + 40;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('width','100%');
+  svg.setAttribute('height','200');
+  svg.innerHTML = `
+    <defs>
+      <marker id="arrow" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto-start-reverse">
+        <path d="M0,0 L6,3 L0,6 Z" fill="#475569"></path>
+      </marker>
+    </defs>
+    <rect x="${pad}" y="${pad}" width="${w}" height="${h}" class="outer" fill="none" stroke-width="2" />
+    <!-- Dimension lines -->
+    <line x1="${pad}" y1="${h+pad+20}" x2="${pad+w}" y2="${h+pad+20}" class="dimline"/>
+    <text x="${pad + w/2}" y="${h+pad+16}" text-anchor="middle" class="dim">${shape.W}${units? ' '+units: ''}</text>
+
+    <line x1="${w+pad+20}" y1="${pad}" x2="${w+pad+20}" y2="${pad+h}" class="dimline"/>
+    <text x="${w+pad+24}" y="${pad + h/2}" dominant-baseline="middle" class="dim">${shape.H}${units? ' '+units: ''}</text>
+  `;
+  return svg;
+}
+
+function svgForL(shape, units){
+  const pad = 16, scale = 8;
+  const Wpx = shape.W * scale, Hpx = shape.H * scale;
+  const wpx = shape.w * scale, hpx = shape.h * scale;
+  const width = Wpx + pad*2 + 60, height = Hpx + pad*2 + 60;
+  const x = pad, y = pad;
+  const path = [
+    [x,y+Hpx], [x,y], [x+Wpx,y], [x+Wpx,y+hpx], [x+Wpx-wpx, y+hpx], [x+Wpx-wpx, y+Hpx], [x,y+Hpx]
+  ];
+  const d = `M ${path[0][0]} ${path[0][1]} L ${path.slice(1).map(p=>p.join(' ')).join(' L ')} Z`;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('width','100%');
+  svg.setAttribute('height','220');
+  svg.innerHTML = `
+    <defs>
+      <marker id="arrow" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto-start-reverse">
+        <path d="M0,0 L6,3 L0,6 Z" fill="#475569"></path>
+      </marker>
+    </defs>
+    <path d="${d}" class="outer" fill="none" stroke-width="2" />
+    <!-- Outer dims W & H -->
+    <line x1="${x}" y1="${y+Hpx+24}" x2="${x+Wpx}" y2="${y+Hpx+24}" class="dimline"/>
+    <text x="${x + Wpx/2}" y="${y+Hpx+20}" text-anchor="middle" class="dim">${shape.W}${units? ' '+units: ''}</text>
+
+    <line x1="${x+Wpx+24}" y1="${y}" x2="${x+Wpx+24}" y2="${y+Hpx}" class="dimline"/>
+    <text x="${x+Wpx+28}" y="${y + Hpx/2}" dominant-baseline="middle" class="dim">${shape.H}${units? ' '+units: ''}</text>
+
+    <!-- Notch dims w & h -->
+    <line x1="${x+Wpx-wpx}" y1="${y+hpx-16}" x2="${x+Wpx}" y2="${y+hpx-16}" class="dimline"/>
+    <text x="${x+Wpx-wpx/2}" y="${y+hpx-20}" text-anchor="middle" class="dim">${shape.w}${units? ' '+units: ''}</text>
+
+    <line x1="${x+Wpx-16}" y1="${y}" x2="${x+Wpx-16}" y2="${y+hpx}" class="dimline"/>
+    <text x="${x+Wpx-12}" y="${y+hpx/2}" dominant-baseline="middle" class="dim">${shape.h}${units? ' '+units: ''}</text>
+  `;
+  return svg;
+}
+
+// --- Render problems ---
+function makeProblemCard(idx, shape, units, task){
+  const {A,P} = computeMetrics(shape);
+  const card = document.createElement('article');
+  card.className = 'card';
+  const title = document.createElement('div');
+  title.innerHTML = `<strong>Problem ${idx+1}.</strong> ${task==='A'? 'Find the <em>area</em>.': task==='P'? 'Find the <em>perimeter</em>.': 'Find the <em>area</em> and <em>perimeter</em>.'}`;
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  meta.textContent = (shape.type==='rect' ? 'Rectangle' : 'Right‑angle L‑shape');
+
+  const svg = (shape.type==='rect') ? svgForRect(shape, units) : svgForL(shape, units);
+
+  const ans = document.createElement('div');
+  ans.className = 'answer';
+  let aText = `A = ${A}${units? ' '+units+'²' : ''}`;
+  let pText = `P = ${P}${units? ' '+units : ''}`;
+  ans.textContent = task==='A' ? aText : task==='P' ? pText : `${aText};  ${pText}`;
+
+  card.appendChild(title); card.appendChild(meta); card.appendChild(svg); card.appendChild(ans);
+  return card;
+}
+
+function generate(){
+  const n = +document.getElementById('count').value || 12;
+  const maxSide = +document.getElementById('maxSide').value || 20;
+  const units = (document.getElementById('units').value || '').trim();
+  const includeL = document.getElementById('includeL').checked;
+  const mixAP = document.getElementById('mixAP').checked;
+  const seedStr = document.getElementById('seed').value || new Date().toISOString().slice(0,10);
+  const rng = rngFromSeed(seedStr);
+
+  // Persist settings in URL
+  const params = new URLSearchParams({n, max:maxSide, u:units, L:includeL?1:0, mix:mixAP?1:0, seed:seedStr});
+  history.replaceState(null,'',`?${params}`);
+
+  const container = document.getElementById('problems');
+  container.innerHTML = '';
+  for(let i=0;i<n;i++){
+    const chooseL = includeL && (rng() < 0.5);
+    const shape = chooseL ? genLShape(rng, maxSide) : genRectangle(rng, maxSide);
+    let task = 'B';
+    if(!mixAP){ task = 'B'; } else { task = (rng()<0.34? 'A' : (rng()<0.5? 'P' : 'B')); }
+    container.appendChild(makeProblemCard(i, shape, units, task));
+  }
+  applyAnswerToggle();
+}
+
+function loadFromURL(){
+  const p = new URLSearchParams(location.search);
+  if(p.has('n')) document.getElementById('count').value = +p.get('n');
+  if(p.has('max')) document.getElementById('maxSide').value = +p.get('max');
+  if(p.has('u')) document.getElementById('units').value = p.get('u');
+  if(p.has('L')) document.getElementById('includeL').checked = p.get('L')==='1';
+  if(p.has('mix')) document.getElementById('mixAP').checked = p.get('mix')==='1';
+  if(p.has('seed')) document.getElementById('seed').value = p.get('seed');
+}
+
+function applyAnswerToggle(){
+  const show = document.getElementById('toggleAnswers').checked;
+  document.querySelectorAll('.answer').forEach(el=>{ el.classList.toggle('show', show); });
+}
+
+// Event wiring
+ document.getElementById('generate').addEventListener('click', generate);
+ document.getElementById('print').addEventListener('click', ()=>window.print());
+ document.getElementById('toggleAnswers').addEventListener('change', applyAnswerToggle);
+
+ // Init
+ loadFromURL();
+ generate();
+</script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Long Division Practice</title>
+<style>
+  :root{--ink:#111;--muted:#666;--ok:#2e7d32;--bad:#c62828;--line:#ddd}
+  *{box-sizing:border-box}
+  body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);margin:0;padding:24px;background:#fbfbfb}
+  #container{max-width:1100px;margin:0 auto}
+  h1{margin:0 0 12px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0 16px}
+  .toolbar label{display:flex;align-items:center;gap:8px;color:var(--muted)}
+  .toolbar input[type=number]{width:120px;padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .toolbar button{padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;font:inherit}
+  .toolbar button:hover{background:#f1f1f1}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(420px,1fr));gap:14px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+  .qhead{font-weight:600;margin-bottom:4px}
+  .division{display:flex;align-items:flex-start;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;font-size:28px}
+  .divisor{padding-right:6px}
+  .bracket{position:relative;border-top:2px solid #000;border-left:2px solid #000;padding-left:8px;margin-top:4px;min-width:120px}
+  .dividend{display:inline-block;padding-left:6px}
+  .answer{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;margin-top:8px}
+  .ansWrap{display:flex;gap:10px;align-items:center}
+  .ansWrap input[type=number]{padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff;width:120px;font-size:16px}
+  .rema{display:flex;align-items:center;gap:6px}
+  .rema label{color:var(--muted);font-size:14px}
+  .result{min-width:26px;text-align:right;font-weight:700;display:none}
+  .ok{color:var(--ok)} .bad{color:var(--bad)}
+  .key{display:none;color:var(--muted);font-size:13px}
+  .key strong{color:var(--ink)}
+  @media print{
+    .toolbar{display:none!important}
+    body{background:#fff;padding:0}
+    #container{max-width:100%;margin:0 18px}
+    .card{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<div id="container">
+  <h1>Long Division (Quotient &amp; Remainder)</h1>
+
+  <div class="toolbar">
+    <label>Max numerator (dividend)
+      <input id="maxNum" type="number" value="999" min="10" max="999999" step="1">
+    </label>
+    <label>Max denominator (divisor)
+      <input id="maxDen" type="number" value="99" min="2" max="9999" step="1">
+    </label>
+    <button id="regen">Generate</button>
+    <button id="check">Check Answers</button>
+    <button id="clear">Clear</button>
+    <button id="print">Print</button>
+    <label><input type="checkbox" id="showKey"> Show Answer Key</label>
+    <label>Seed <input id="seed" type="number" placeholder="(optional)"></label>
+    <span id="seedEcho" class="units"></span>
+  </div>
+
+  <div id="grid" class="grid"></div>
+</div>
+
+<script>
+/* ===== utilities ===== */
+function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296}}
+function rngFromSeed(seed){return (seed==null||seed==='')?Math.random:mulberry32((Number(seed)>>>0)||0)}
+const randint=(r,min,max)=>Math.floor(r()*(max-min+1))+min;
+
+/* ===== problem construction ===== */
+function makeOne(rng, maxNum, maxDen){
+  for(let tries=0; tries<200; tries++){
+    const d = randint(rng, 2, Math.max(2, maxDen));
+    const rMax = Math.min(9, d-1);
+    const r = randint(rng, 0, rMax);
+    const qMax = Math.floor((maxNum - r) / d);
+    if(qMax >= 1){
+      const q = randint(rng, 1, qMax);
+      const n = q*d + r;
+      return { dividend:n, divisor:d, quotient:q, remainder:r };
+    }
+  }
+  return { dividend: 10, divisor: 3, quotient: 3, remainder: 1 };
+}
+
+function makeSet(rng, count, maxNum, maxDen){
+  const arr=[];
+  for(let i=0;i<count;i++) arr.push(makeOne(rng, maxNum, maxDen));
+  return arr;
+}
+
+/* ===== rendering ===== */
+const grid = document.getElementById('grid');
+function render(problems){
+  grid.innerHTML = '';
+  problems.forEach((p, i)=>{
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="qhead">Q${i+1}</div>
+      <div class="division">
+        <div class="divisor">${p.divisor}</div>
+        <div class="bracket"><span class="dividend">${p.dividend}</span></div>
+      </div>
+      <div class="answer">
+        <div class="ansWrap">
+          <input type="number" class="qAns" inputmode="numeric" step="1">
+          <div class="rema">
+            <label>r</label>
+            <input type="number" class="rAns" inputmode="numeric" min="0" max="9" step="1">
+          </div>
+        </div>
+        <div class="result"></div>
+      </div>
+      <div class="key">Answer: <strong>${p.quotient}</strong> r <strong>${p.remainder}</strong></div>
+    `;
+    card.dataset.dividend = p.dividend;
+    card.dataset.divisor = p.divisor;
+    card.dataset.q = p.quotient;
+    card.dataset.r = p.remainder;
+    grid.appendChild(card);
+  });
+}
+
+/* ===== interactions ===== */
+const maxNumEl = document.getElementById('maxNum');
+const maxDenEl = document.getElementById('maxDen');
+const regenBtn = document.getElementById('regen');
+const checkBtn = document.getElementById('check');
+const clearBtn = document.getElementById('clear');
+const printBtn = document.getElementById('print');
+const showKey = document.getElementById('showKey');
+const seedInput = document.getElementById('seed');
+const seedEcho = document.getElementById('seedEcho');
+
+function generate(){
+  const maxNum = Math.max(10, Math.min(999999, parseInt(maxNumEl.value||'999',10)));
+  const maxDen = Math.max(2, Math.min(9999, parseInt(maxDenEl.value||'99',10)));
+  maxNumEl.value = maxNum;
+  maxDenEl.value = maxDen;
+
+  const seed = seedInput.value;
+  const rng = rngFromSeed(seed);
+  seedEcho.textContent = seed ? `(seed ${seed})` : '';
+
+  const problems = makeSet(rng, 12, maxNum, maxDen);
+  render(problems);
+
+  document.querySelectorAll('.result').forEach(r=>{r.style.display='none'; r.textContent=''; r.className='result';});
+  document.querySelectorAll('.key').forEach(k=>k.style.display = showKey.checked ? 'block' : 'none');
+}
+
+function checkAnswers(){
+  grid.querySelectorAll('.card').forEach(card=>{
+    const qEl = card.querySelector('.qAns');
+    const rEl = card.querySelector('.rAns');
+    const resEl = card.querySelector('.result');
+
+    const n = Number(card.dataset.dividend);
+    const d = Number(card.dataset.divisor);
+    const q = Number(qEl.value);
+    const r = Number(rEl.value);
+
+    let ok = Number.isInteger(q) && Number.isInteger(r) &&
+             r >= 0 && r < d && r <= 9 &&
+             d*q + r === n;
+
+    if(ok){ resEl.textContent = '✓'; resEl.className = 'result ok'; }
+    else  { resEl.textContent = '✗'; resEl.className = 'result bad'; }
+    resEl.style.display = 'block';
+  });
+}
+
+function clearAnswers(){
+  grid.querySelectorAll('.qAns,.rAns').forEach(i=>i.value='');
+  grid.querySelectorAll('.result').forEach(r=>{r.style.display='none'; r.textContent=''; r.className='result';});
+}
+
+regenBtn.addEventListener('click', generate);
+checkBtn.addEventListener('click', checkAnswers);
+clearBtn.addEventListener('click', clearAnswers);
+printBtn.addEventListener('click', ()=>window.print());
+showKey.addEventListener('change', ()=>document.querySelectorAll('.key').forEach(k=>k.style.display = showKey.checked?'block':'none'));
+seedInput.addEventListener('change', generate);
+maxNumEl.addEventListener('change', generate);
+maxDenEl.addEventListener('change', generate);
+
+/* initial */
+generate();
+</script>
+</body>
+</html>

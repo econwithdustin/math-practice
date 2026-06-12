@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Math Facts Practice</title>
+  <style>
+    :root {
+      --border:#ddd;
+      --ink:#111;
+      --ok:#2e7d32;
+      --bad:#c62828;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Courier New", monospace;
+      color: var(--ink);
+      margin: 0;
+      padding: 24px;
+    }
+    #container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    h1 { margin: 0 0 8px; }
+    .subhead {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .subhead label { font-size: 14px; white-space: nowrap; }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
+      gap: 8px;
+      margin: 12px 0 16px;
+    }
+    .controls > label {
+      display: flex; flex-direction: column; gap: 4px; font-size: 14px;
+    }
+    select, input[type="number"], input[type="text"] {
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font: inherit;
+    }
+    .buttons {
+      display:flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px;
+    }
+    button {
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      background: #fafafa;
+      border-radius: 8px;
+      cursor: pointer;
+      font: inherit;
+    }
+    button:hover { background: #f1f1f1; }
+
+    #questions {
+      display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between;
+      counter-reset: qnum;
+    }
+    .question {
+      width: 10.5%;
+      min-width: 115px;
+      border: 1px solid var(--border);
+      padding: 10px 10px 12px;
+      display: flex; flex-direction: column; align-items: flex-end;
+      font-size: 18px;
+      position: relative;
+    }
+    .qnum::before {
+      counter-increment: qnum;
+      content: counter(qnum) ".";
+      position: absolute; left: 8px; top: 6px; font-size: 12px; opacity: .6;
+    }
+    .operation { display: flex; align-items: center; gap: 6px; }
+    .equals-line { border-bottom: 1px solid #000; width: 100%; margin: 2px 0; }
+    input.user-answer {
+      width: 100%;
+      font-family: inherit;
+      font-size: 22px;
+      text-align: right;
+      border: none;
+      outline: none;
+    }
+    input.user-answer::-webkit-inner-spin-button { display: none; }
+    .result {
+      font-size: 18px; margin-top: 4px; display:none;
+    }
+    .result.ok { color: var(--ok); }
+    .result.bad { color: var(--bad); }
+
+    .answer-key {
+      margin-top: 16px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border);
+      display:none;
+      font-size: 14px;
+      columns: 3 250px;
+      column-gap: 24px;
+    }
+    .answer-key h3 { margin: 0 0 8px; break-inside: avoid; }
+    .answer-key ul { margin: 0 0 12px; padding-left: 18px; break-inside: avoid; }
+    .meta { display:flex; gap:16px; align-items:center; }
+    .meta input[type="text"] { width: 220px; }
+
+    /* Print styles: hide controls, keep grid tight */
+    @media print {
+      .controls, .buttons, .subhead, .answer-toggle { display: none !important; }
+      body { padding: 0; }
+      #container { max-width: 100%; margin: 0 24px; }
+      .question { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1>Math Facts Practice</h1>
+    <div class="subhead">
+      <div class="meta">
+        <label>Student: <input id="studentName" type="text" placeholder="Name"></label>
+        <label>Date: <input id="dateField" type="text" placeholder="MM/DD/YYYY"></label>
+      </div>
+      <label class="answer-toggle"><input type="checkbox" id="toggleKey"> Show Answer Key</label>
+      <div style="text-align:right; font-size:12px; opacity:.75;">Seed: <span id="seedDisplay">—</span></div>
+    </div>
+
+    <div class="controls" aria-label="Worksheet settings">
+      <label>Operation
+        <select id="op">
+          <option value="+">Addition (+)</option>
+          <option value="-">Subtraction (−)</option>
+          <option value="×">Multiplication (×)</option>
+          <option value="÷">Division (÷)</option>
+        </select>
+      </label>
+      <label>Min
+        <input id="minVal" type="number" value="1" min="-999">
+      </label>
+      <label>Max
+        <input id="maxVal" type="number" value="9" min="-999">
+      </label>
+      <label>Problems
+        <input id="count" type="number" value="48" min="6" max="120" step="6">
+      </label>
+      <label>Allow Negatives (− only)
+        <select id="allowNeg">
+          <option value="no" selected>No</option>
+          <option value="yes">Yes</option>
+        </select>
+      </label>
+      <label>Seed (optional)
+        <input id="seed" type="number" placeholder="e.g., 12345" min="0">
+      </label>
+    </div>
+
+    <div class="buttons">
+      <button id="randomizeButton">Generate</button>
+      <button id="checkAnswersButton">Check Answers</button>
+      <button id="clearAnswersButton">Clear Answers</button>
+      <button id="printButton">Print</button>
+    </div>
+
+    <div id="questions" role="list"></div>
+
+    <div class="answer-key" id="answerKey">
+      <h3>Answer Key</h3>
+      <ul id="keyList"></ul>
+    </div>
+  </div>
+
+  <script>
+    // ===== Utility: seeded PRNG (Mulberry32) for reproducible worksheets =====
+    function mulberry32(a) {
+      return function() {
+        let t = a += 0x6D2B79F5;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      }
+    }
+    function makeRngFromSeed(seed) {
+      if (seed == null || isNaN(seed)) return Math.random;
+      return mulberry32(Number(seed) >>> 0);
+    }
+    function randint(rng, min, max) { // inclusive
+      return Math.floor(rng() * (max - min + 1)) + min;
+    }
+
+    // ===== DOM =====
+    const qs = s => document.querySelector(s);
+    const questionsEl = qs("#questions");
+    const randomizeButton = qs("#randomizeButton");
+    const printButton = qs("#printButton");
+    const checkAnswersButton = qs("#checkAnswersButton");
+    const clearAnswersButton = qs("#clearAnswersButton");
+    const opEl = qs("#op");
+    const minEl = qs("#minVal");
+    const maxEl = qs("#maxVal");
+    const countEl = qs("#count");
+    const allowNegEl = qs("#allowNeg");
+    const seedInput = qs("#seed");
+    const seedDisplay = qs("#seedDisplay");
+    const toggleKey = qs("#toggleKey");
+    const keyList = qs("#keyList");
+    const answerKey = qs("#answerKey");
+
+    // ===== Problem generation for each operation =====
+    function makeProblem(rng, op, min, max, allowNeg) {
+      let a, b, ans, sym = op;
+      if (op === "+") {
+        a = randint(rng, min, max);
+        b = randint(rng, min, max);
+        ans = a + b;
+      } else if (op === "-") {
+        a = randint(rng, min, max);
+        b = randint(rng, min, max);
+        if (!allowNeg && b > a) [a, b] = [b, a]; // avoid negatives unless allowed
+        ans = a - b;
+      } else if (op === "×") {
+        a = randint(rng, min, max);
+        b = randint(rng, min, max);
+        ans = a * b;
+      } else if (op === "÷") {
+        // ensure integer division: generate product then divide
+        b = randint(rng, Math.max(1, min), Math.max(1, max)); // divisor != 0
+        const q = randint(rng, Math.max(1, min), Math.max(1, max));
+        a = b * q;
+        ans = q;
+        sym = "÷";
+      }
+      return { a, b, ans, sym };
+    }
+
+    function formatQuestionHTML(idx, p) {
+      const id = `q${idx}`;
+      return `
+        <div class="question qnum" role="listitem" data-answer="${p.ans}" data-op="${p.sym}" aria-labelledby="${id}">
+          <div id="${id}" class="sr-only" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;">Problem ${idx+1}</div>
+          <div>${p.a}</div>
+          <div class="operation">${p.sym}&nbsp;${p.b}</div>
+          <div class="equals-line"></div>
+          <input type="number" class="user-answer" inputmode="numeric" />
+          <div class="result" aria-live="polite"></div>
+        </div>
+      `;
+    }
+
+    function generateWorksheet() {
+      const op = opEl.value;
+      let min = parseInt(minEl.value);
+      let max = parseInt(maxEl.value);
+      let count = Math.max(6, Math.min(120, parseInt(countEl.value) || 48));
+      if (isNaN(min)) min = 1;
+      if (isNaN(max)) max = 9;
+      if (min > max) [min, max] = [max, min];
+
+      const allowNeg = allowNegEl.value === "yes";
+      const seed = seedInput.value ? Number(seedInput.value) : Math.floor(Math.random()*1e9);
+      seedDisplay.textContent = String(seed);
+      const rng = makeRngFromSeed(seed);
+
+      questionsEl.innerHTML = "";
+      keyList.innerHTML = "";
+
+      const problems = [];
+      for (let i = 0; i < count; i++) {
+        problems.push(makeProblem(rng, op, min, max, allowNeg));
+      }
+
+      // Render problems
+      problems.forEach((p, i) => {
+        questionsEl.insertAdjacentHTML("beforeend", formatQuestionHTML(i, p));
+        const opChar = p.sym;
+        keyList.insertAdjacentHTML(
+          "beforeend",
+          `<li>${p.a} ${opChar} ${p.b} = <strong>${p.ans}</strong></li>`
+        );
+      });
+
+      // Hide results and key initially
+      document.querySelectorAll(".result").forEach(r => { r.style.display = "none"; r.className = "result"; r.textContent = ""; });
+      answerKey.style.display = toggleKey.checked ? "block" : "none";
+    }
+
+    function checkAnswers() {
+      document.querySelectorAll(".question").forEach((q) => {
+        const correct = Number(q.getAttribute("data-answer"));
+        const input = q.querySelector(".user-answer");
+        const result = q.querySelector(".result");
+        const val = Number(input.value);
+        if (Number.isFinite(val) && val === correct) {
+          result.textContent = "✓";
+          result.className = "result ok";
+        } else {
+          result.textContent = "✗";
+          result.className = "result bad";
+        }
+        result.style.display = "block";
+      });
+    }
+
+    function clearAnswers() {
+      document.querySelectorAll(".user-answer").forEach(i => i.value = "");
+      document.querySelectorAll(".result").forEach(r => { r.style.display = "none"; r.className = "result"; r.textContent = ""; });
+    }
+
+    // Events
+    randomizeButton.addEventListener("click", generateWorksheet);
+    printButton.addEventListener("click", () => window.print());
+    checkAnswersButton.addEventListener("click", checkAnswers);
+    clearAnswersButton.addEventListener("click", clearAnswers);
+    toggleKey.addEventListener("change", () => {
+      answerKey.style.display = toggleKey.checked ? "block" : "none";
+    });
+
+    // Initial render (keeps your original behavior)
+    generateWorksheet();
+  </script>
+</body>
+</html>

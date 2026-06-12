@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Rectangle Area Practice</title>
+<style>
+  :root{--ink:#111;--muted:#666;--ok:#2e7d32;--bad:#c62828;--line:#ddd;}
+  *{box-sizing:border-box}
+  body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);margin:0;padding:24px;background:#fbfbfb}
+  #container{max-width:1100px;margin:0 auto}
+  h1{margin:0 0 8px}
+  .lead{color:var(--muted);margin:0 0 16px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0 16px}
+  .toolbar label{display:flex;align-items:center;gap:8px;color:var(--muted)}
+  .toolbar input[type=number]{width:120px;padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .toolbar button{padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;font:inherit}
+  .toolbar button:hover{background:#f1f1f1}
+  .grid{display:grid;grid-template-columns:repeat(3,minmax(300px,1fr));gap:14px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+  .qhead{display:flex;justify-content:space-between;align-items:baseline}
+  .units{font-size:12px;color:var(--muted)}
+  .shapeBox{width:200px;height:200px}
+  .shapeWrap{display:flex;justify-content:center}
+  svg{width:200px;height:200px;display:block}
+  .answer{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+  .answer input[type=number]{padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .result{min-width:26px;text-align:right;font-weight:700;display:none}
+  .ok{color:var(--ok)} .bad{color:var(--bad)}
+  .key{display:none;color:var(--muted);font-size:13px}
+  .key strong{color:var(--ink)}
+  @media print{
+    .toolbar{display:none!important}
+    body{background:#fff;padding:0}
+    #container{max-width:100%;margin:0 18px}
+    .card{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<div id="container">
+  <h1>Rectangle Area Practice</h1>
+  <p class="lead">Each drawing preserves the rectangle’s side ratio and fits in a 200×200 cell. Compute area using <strong>A = length × width</strong> (cm²).</p>
+
+  <div class="toolbar">
+    <label>Max side length
+      <input id="maxSide" type="number" value="30" min="5" max="200" step="1">
+    </label>
+    <button id="regen">Generate</button>
+    <button id="check">Check Answers</button>
+    <button id="clear">Clear</button>
+    <button id="print">Print</button>
+    <label><input type="checkbox" id="showKey"> Show Answer Key</label>
+    <label>Seed <input id="seed" type="number" placeholder="(optional)"></label>
+    <span id="seedEcho" class="units"></span>
+  </div>
+
+  <div id="grid" class="grid"></div>
+</div>
+
+<script>
+/* ===== utilities ===== */
+function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296}}
+function rngFromSeed(seed){return (seed==null||seed==='')?Math.random:mulberry32((Number(seed)>>>0)||0)}
+const randint=(r,min,max)=>Math.floor(r()*(max-min+1))+min;
+
+/* line with perpendicular ticks at both ends */
+function ticksLine(x1,y1,x2,y2,stroke="#888"){
+  const tick=6, parts=[];
+  parts.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="1"/>`);
+  const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy)||1, nx=-dy/len, ny=dx/len;
+  parts.push(`<line x1="${x1-nx*tick}" y1="${y1-ny*tick}" x2="${x1+nx*tick}" y2="${y1+ny*tick}" stroke="${stroke}" stroke-width="1"/>`);
+  parts.push(`<line x1="${x2-nx*tick}" y1="${y2-ny*tick}" x2="${x2+nx*tick}" y2="${y2+ny*tick}" stroke="${stroke}" stroke-width="1"/>`);
+  return parts.join("");
+}
+
+/* ===== draw: proportional, scaled to a fixed 200×200 cell ===== */
+function drawRectangleSVG(w, h){
+  // Fixed cell size
+  const CELL = 200;
+  const PAD = 20;              // inner padding inside the 200×200
+  const innerMax = CELL - 2*PAD; // 160×160 drawable area
+
+  // Preserve aspect ratio; scale to fit inside innerMax box
+  const scale = Math.min(innerMax / w, innerMax / h);
+  const W = w * scale;
+  const H = h * scale;
+
+  // Center the rectangle inside the 200×200 cell
+  const x0 = (CELL - W)/2;
+  const y0 = (CELL - H)/2;
+
+  // Shapes & helpers
+  const rect = `<rect x="${x0}" y="${y0}" width="${W}" height="${H}" fill="#eef5ff" stroke="#333" stroke-width="1.5"/>`;
+
+  // helper ticked lines (bottom and left edges)
+  const baseTicks = ticksLine(x0, y0+H, x0+W, y0+H);
+  const heightTicks = ticksLine(x0, y0, x0, y0+H);
+
+  // Labels:
+  // - Width label under the bottom side (horizontal)
+  const widthLabel = `<text x="${x0+W/2}" y="${y0+H+14}" font-size="12" text-anchor="middle" fill="#222">${w} cm</text>`;
+
+  // - Length label running alongside the left side (vertical, parallel to the side)
+  //   We rotate the text around its anchor so it reads along the edge.
+  const lenX = x0 - 10;                 // small offset to sit just left of the line
+  const lenY = y0 + H/2;                // middle of the side
+  const lengthLabel = `<text x="${lenX}" y="${lenY}" font-size="12" text-anchor="middle" fill="#222"
+                         transform="rotate(-90, ${lenX}, ${lenY})">${h} cm</text>`;
+
+  // Build SVG inside a fixed 200×200 viewBox and size
+  return `<svg viewBox="0 0 ${CELL} ${CELL}" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+            ${rect}${baseTicks}${heightTicks}${widthLabel}${lengthLabel}
+          </svg>`;
+}
+
+/* ===== problem generation ===== */
+function makeProblem(rng, max){
+  const w = randint(rng, 1, max);   // width (horizontal)
+  const h = randint(rng, 1, max);   // length (vertical)
+  return { w, h, area: w*h, svg: drawRectangleSVG(w, h) };
+}
+function makeSet(rng, count, max){
+  const arr = [];
+  for(let i=0;i<count;i++) arr.push(makeProblem(rng, max));
+  return arr;
+}
+
+/* ===== rendering ===== */
+const grid = document.getElementById('grid');
+function render(problems){
+  grid.innerHTML = '';
+  problems.forEach((p, i)=>{
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="qhead">
+        <strong>Q${i+1}</strong>
+        <span class="units">A = ℓ × w</span>
+      </div>
+      <div class="shapeWrap">
+        <div class="shapeBox">
+          ${p.svg}
+        </div>
+      </div>
+      <div class="answer">
+        <input type="number" class="ans" placeholder="Enter area (cm²)" step="1">
+        <div class="result"></div>
+      </div>
+      <div class="key">Answer: <strong>${p.area}</strong> cm²</div>
+    `;
+    card.dataset.answer = p.area;
+    grid.appendChild(card);
+  });
+}
+
+/* ===== interactions ===== */
+const maxSideEl = document.getElementById('maxSide');
+const regenBtn = document.getElementById('regen');
+const checkBtn = document.getElementById('check');
+const clearBtn = document.getElementById('clear');
+const printBtn = document.getElementById('print');
+const showKey = document.getElementById('showKey');
+const seedInput = document.getElementById('seed');
+const seedEcho = document.getElementById('seedEcho');
+
+function generate(){
+  const max = Math.max(1, Math.min(200, parseInt(maxSideEl.value||'30',10)));
+  maxSideEl.value = max;
+  const seed = seedInput.value;
+  const rng = rngFromSeed(seed);
+  seedEcho.textContent = seed ? `(seed ${seed})` : '';
+  const problems = makeSet(rng, 12, max);
+  render(problems);
+  // reset results & keys
+  document.querySelectorAll('.result').forEach(r=>{r.style.display='none'; r.textContent=''; r.className='result';});
+  document.querySelectorAll('.key').forEach(k=>k.style.display = showKey.checked ? 'block' : 'none');
+}
+
+function checkAnswers(){
+  grid.querySelectorAll('.card').forEach(card=>{
+    const ansEl = card.querySelector('.ans');
+    const resEl = card.querySelector('.result');
+    const correct = Number(card.dataset.answer);
+    const val = Number(ansEl.value);
+    if(Number.isFinite(val) && val === correct){
+      resEl.textContent = '✓'; resEl.className = 'result ok';
+    }else{
+      resEl.textContent = '✗'; resEl.className = 'result bad';
+    }
+    resEl.style.display = 'block';
+  });
+}
+
+function clearAnswers(){
+  grid.querySelectorAll('.ans').forEach(i=>i.value='');
+  grid.querySelectorAll('.result').forEach(r=>{r.style.display='none'; r.textContent=''; r.className='result';});
+}
+
+regenBtn.addEventListener('click', generate);
+checkBtn.addEventListener('click', checkAnswers);
+clearBtn.addEventListener('click', clearAnswers);
+printBtn.addEventListener('click', ()=>window.print());
+showKey.addEventListener('change', ()=>document.querySelectorAll('.key').forEach(k=>k.style.display = showKey.checked?'block':'none'));
+seedInput.addEventListener('change', generate);
+maxSideEl.addEventListener('change', generate);
+
+/* initial */
+generate();
+</script>
+</body>
+</html>

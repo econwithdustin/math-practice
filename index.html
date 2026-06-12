@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Math Practice</title>
+  <meta name="description" content="Printable and interactive math practice worksheets for students." />
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: #f0f4ff;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .hero {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #a855f7 100%);
+      color: white;
+      text-align: center;
+      padding: 56px 24px 48px;
+    }
+    .hero-icon {
+      font-size: 56px;
+      line-height: 1;
+      margin-bottom: 16px;
+    }
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 48px);
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+    }
+    .hero p {
+      font-size: clamp(15px, 2vw, 18px);
+      opacity: 0.88;
+      max-width: 480px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 40px 20px 60px;
+    }
+
+    /* ── Category section ── */
+    .category { margin-bottom: 44px; }
+    .category-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid;
+    }
+    .category-header .cat-icon { font-size: 26px; line-height: 1; }
+    .category-header h2 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+
+    .category--arithmetic .category-header { border-color: #3b82f6; color: #1d4ed8; }
+    .category--multdiv    .category-header { border-color: #10b981; color: #065f46; }
+    .category--geometry   .category-header { border-color: #f59e0b; color: #92400e; }
+
+    /* ── Card grid ── */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      display: flex;
+      flex-direction: column;
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      text-decoration: none;
+      color: inherit;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(0,0,0,.10);
+    }
+    .card:focus-visible {
+      outline: 3px solid #6366f1;
+      outline-offset: 2px;
+    }
+
+    .card-icon {
+      font-size: 32px;
+      line-height: 1;
+      margin-bottom: 12px;
+    }
+    .card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      line-height: 1.3;
+    }
+    .card p {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.5;
+      flex: 1;
+    }
+    .card-arrow {
+      margin-top: 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #6366f1;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Color accents per category */
+    .category--arithmetic   .card-arrow { color: #2563eb; }
+    .category--multdiv      .card-arrow { color: #059669; }
+    .category--geometry     .card-arrow { color: #d97706; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 24px 20px 40px;
+      font-size: 13px;
+      color: #94a3b8;
+    }
+
+    @media (max-width: 480px) {
+      .cards { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="hero">
+    <div class="hero-icon">🧮</div>
+    <h1>Math Practice</h1>
+    <p>Choose a worksheet below to practice online or print it out.</p>
+  </div>
+
+  <main>
+
+    <!-- Arithmetic -->
+    <section class="category category--arithmetic">
+      <div class="category-header">
+        <span class="cat-icon">➕</span>
+        <h2>Arithmetic</h2>
+      </div>
+      <div class="cards">
+
+        <a class="card" href="./singleadd.html">
+          <div class="card-icon">1️⃣</div>
+          <h3>Single-Digit Addition</h3>
+          <p>Quick single-digit sums with instant answer checking.</p>
+          <span class="card-arrow">Open →</span>
+        </a>
+
+        <a class="card" href="./addition.html">
+          <div class="card-icon">🔢</div>
+          <h3>Two-Digit Addition</h3>
+          <p>Column addition practice with carrying.</p>
+          <span class="card-arrow">Open →</span>
+        </a>
+
+        <a class="card" href="./subtract.html">
+          <div class="card-icon">➖</div>
+          <h3>Two-Digit Subtraction</h3>
+          <p>Subtract two-digit numbers with self-checking.</p>
+          <span class="card-arrow">Open →</span>
+        </a>
+
+        <a class="card" href="./borrowing.html">
+          <div class="card-icon">🔄</div>
+          <h3>Subtraction with Borrowing</h3>
+          <p>Subtracting from teen numbers where borrowing is required.</p>
+          <span class="card-arrow">Open →</span>
+        </a>
+
+        <a class="card" href="./mathpractice.html">
+          <div class="card-icon">🎲</div>
+          <h3>Mixed Math Facts</h3>
+          <p>Customizable mixed drills covering +, −, ×, and ÷.</p>
+          <span class="card-arrow">Open →</span>
+        </a>
+
+      </div>
+    </section>
+
+    <!-- Multiplication & Division -->
+    <section class="category category--multdiv">
+      <div class="category-header">
+        <span class="cat-icon">✖️</span>
+        <h2>Multiplication &amp; Division</h2>
+      </div>
+      <div class="cards">
+
+        <a class="card" href="./timestables.html">
+          <div class="card-icon">📊</div>
+          <h3>Times Tables</h3>
+          <p>Practice any multiplication table with seeded, shuffled problems.</p>
+          <span class="card-arrow">Open →</span>
+        </a>
+
+        <a class="card" href="./ldremainders.html">
+          <div class="card-icon">➗</div>
+          <h3>Division – No Remainders</h3>
+          <p>Long-division layout for problems that divide evenly.</p>
+          <span class="card-arrow">Open →</span>
+        </a>
+
+        <a class="card" href="./longdivision.html">
+          <div class="card-icon">🔣</div>
+          <h3>Long Division with Remainders</h3>
+          <p>Classic long division — enter both quotient and remainder.</p>
+          <span class="card-arrow">Open →</span>
+        </a>
+
+      </div>
+    </section>
+
+    <!-- Geometry -->
+    <section class="category category--geometry">
+      <div class="category-header">
+        <span class="cat-icon">📐</span>
+        <h2>Geometry</h2>
+      </div>
+      <div class="cards">
+
+        <a class="card" href="./arearectangles.html">
+          <div class="card-icon">⬜</div>
+          <h3>Rectangle Area</h3>
+          <p>Find A = ℓ × w using scaled rectangle drawings.</p>
+          <span class="card-arrow">Open →</span>
+        </a>
+
+        <a class="card" href="./perimeter.html">
+          <div class="card-icon">🔲</div>
+          <h3>Rectangle Perimeter</h3>
+          <p>Practice P = 2(ℓ + w) with labeled dimension diagrams.</p>
+          <span class="card-arrow">Open →</span>
+        </a>
+
+        <a class="card" href="./perimarea.html">
+          <div class="card-icon">📏</div>
+          <h3>Perimeter &amp; Area Mixed</h3>
+          <p>Combined practice for both area and perimeter on rectangles and L-shapes.</p>
+          <span class="card-arrow">Open →</span>
+        </a>
+
+        <a class="card" href="./complexrect.html">
+          <div class="card-icon">🔷</div>
+          <h3>Right-Angle Polygon Areas</h3>
+          <p>Find area of L-shapes and other right-angle figures.</p>
+          <span class="card-arrow">Open →</span>
+        </a>
+
+        <a class="card" href="./triangles.html">
+          <div class="card-icon">🔺</div>
+          <h3>Triangle Area</h3>
+          <p>Compute A = ½ · b · h from labeled triangle drawings.</p>
+          <span class="card-arrow">Open →</span>
+        </a>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    Each worksheet can be used on-screen or printed. Use your browser's Print button on any page.
+  </footer>
+
+</body>
+</html>

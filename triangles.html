@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Triangle Area Practice</title>
+  <style>
+    :root { --ink:#111; --muted:#666; --ok:#2e7d32; --bad:#c62828; --line:#ddd; --warn:#9c5300; }
+    * { box-sizing: border-box; }
+    body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, ui-sans-serif;
+           color: var(--ink); margin: 0; padding: 24px; background: #fbfbfb; }
+    #container { max-width: 1150px; margin: 0 auto; }
+    h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: .2px; }
+    p.lead { margin: 0 0 16px; color: var(--muted); }
+    .toolbar { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; margin:14px 0 6px; }
+    .toolbar label { font-size: 14px; color: var(--muted); display:flex; align-items:center; gap:6px; }
+    .toolbar input[type="number"] { width: 120px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: white; }
+    .toolbar .mini input[type="number"] { width: 90px; }
+    .toolbar button { padding:10px 14px; border:1px solid var(--line); border-radius:10px; background:white; cursor:pointer; font:inherit; }
+    .toolbar button:hover { background:#f1f1f1; }
+    .warn { font-size: 13px; color: var(--warn); margin: 6px 0 12px; display:none; }
+    .grid { display:grid; grid-template-columns:repeat(3, minmax(300px, 1fr)); gap:14px; }
+    .card { background:white; border:1px solid var(--line); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:8px; }
+    .card .qhead { display:flex; justify-content:space-between; align-items:baseline; }
+    .qidx { font-weight:600; font-size:14px; color:var(--muted); }
+    .units { font-size:12px; color:var(--muted); }
+    svg { width:100%; height:200px; display:block; }
+    .answer { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; margin-top:4px; }
+    .answer input[type="number"] { padding:10px; border:1px solid var(--line); border-radius:10px; background:#fff; }
+    .result { min-width:26px; text-align:right; font-weight:700; display:none; }
+    .ok { color: var(--ok); } .bad { color: var(--bad); }
+    .key { margin-top:10px; display:none; font-size:13px; color:var(--muted); }
+    .key strong { color:var(--ink); }
+    .group { display:flex; gap:10px 12px; flex-wrap:wrap; align-items:center; }
+    .group > .block { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .group .label { font-size:12px; color:var(--muted); margin-right:4px; }
+    @media print { .toolbar, .warn { display:none !important; } body{ background:white; padding:0; } #container{ max-width:100%; margin:0 18px; } .card{ break-inside:avoid; } }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1>Triangle Area Practice</h1>
+    <p class="lead">Each diagram shows a triangle with a labeled base <em>b</em> and altitude (height) <em>h</em> perpendicular to the base (or its extension). Compute area using <strong>A = ½·b·h</strong>. Units are centimeters.</p>
+
+    <!-- Top controls -->
+    <div class="toolbar" aria-label="Primary controls">
+      <button id="regen">Generate New Set</button>
+      <button id="check">Check Answers</button>
+      <button id="clear">Clear Answers</button>
+      <button id="print">Print</button>
+      <label><input type="checkbox" id="toggleKey"> Show Answer Key</label>
+      <label>Seed <input type="number" id="seed" placeholder="(optional)"></label>
+      <span id="seedEcho" class="units"></span>
+    </div>
+
+    <!-- Filters & ranges -->
+    <div class="toolbar group" aria-label="Filters and ranges">
+      <div class="block">
+        <span class="label">Types:</span>
+        <label><input type="checkbox" id="incAcute" checked> Acute</label>
+        <label><input type="checkbox" id="incRight"> Right</label>
+        <label><input type="checkbox" id="incObtuse"> Obtuse</label>
+      </div>
+      <div class="block mini">
+        <label>Problems
+          <input type="number" id="count" value="12" min="1" max="60" step="1">
+        </label>
+      </div>
+      <div class="block mini">
+        <span class="label">Base (cm):</span>
+        <label>Min <input type="number" id="baseMin" value="8" min="1" step="1"></label>
+        <label>Max <input type="number" id="baseMax" value="30" min="1" step="1"></label>
+      </div>
+      <div class="block mini">
+        <span class="label">Height (cm):</span>
+        <label>Min <input type="number" id="heightMin" value="6" min="1" step="1"></label>
+        <label>Max <input type="number" id="heightMax" value="24" min="1" step="1"></label>
+      </div>
+      <label class="mini"><input type="checkbox" id="intArea" checked> Integer areas only</label>
+    </div>
+
+    <div id="typeWarning" class="warn">Pick at least one triangle type (Acute, Right, or Obtuse) to generate problems.</div>
+    <div id="rangeWarning" class="warn">Please ensure min ≤ max and all ranges are positive integers.</div>
+
+    <div id="grid" class="grid" role="list"></div>
+  </div>
+
+  <script>
+    // ---------- utilities ----------
+    function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296;}}
+    function rngFromSeed(seed){ return (seed==null || seed==='') ? Math.random : mulberry32((Number(seed)>>>0)||0); }
+    const randint = (rng, min, max) => Math.floor(rng()*(max-min+1))+min;
+    const choose = (rng, arr) => arr[Math.floor(rng()*arr.length)];
+    const within = (val, target, absTol=0.5, relTol=0.01) => Math.abs(val-target) <= Math.max(absTol, relTol*Math.abs(target));
+    function intVal(el, fallback) { const n = parseInt(el.value, 10); return Number.isFinite(n) ? n : fallback; }
+
+    // Make 1/2*b*h integer if possible by nudging within range
+    function forceIntegerAreaInRange(base, bMin, bMax, height, hMin, hMax) {
+      const bothOdd = (base % 2 !== 0) && (height % 2 !== 0);
+      if (!bothOdd) return { base, height };
+      if (base + 1 <= bMax) return { base: base + 1, height };
+      if (base - 1 >= bMin) return { base: base - 1, height };
+      if (height + 1 <= hMax) return { base, height: height + 1 };
+      if (height - 1 >= hMin) return { base, height: height - 1 };
+      return { base, height };
+    }
+
+    // ---------- triangle factory ----------
+    function makeTriangleProblem(rng, type, ranges, wantIntegerArea) {
+      let base = randint(rng, ranges.bMin, ranges.bMax);
+      let height = randint(rng, ranges.hMin, ranges.hMax);
+      if (wantIntegerArea) {
+        const adj = forceIntegerAreaInRange(base, ranges.bMin, ranges.bMax, height, ranges.hMin, ranges.hMax);
+        base = adj.base; height = adj.height;
+      }
+
+      const pxPerUnit = 7;
+      const Bpx = base * pxPerUnit;
+      const Hpx = height * pxPerUnit;
+
+      let margin = 20;
+      let width = Math.max(340, Bpx + margin*2);
+      const heightPx = 200;
+
+      // Base endpoints
+      let x0 = (width - Bpx)/2, y0 = heightPx - 30;
+      let x1 = x0 + Bpx, y1 = y0;
+
+      // Position apex and altitude foot
+      let ax, ay, footX, showBaseExtension = false, rightMarkerAt = null;
+
+      if (type === 'acute') {
+        // projection strictly inside base
+        let t = 0.2 + 0.6 * rng();
+        ax = x0 + t * Bpx;
+        ay = y0 - Hpx;
+
+        // nudge away from ~90° at apex
+        const vLx = x0 - ax, vLy = y0 - ay;
+        const vRx = x1 - ax, vRy = y1 - ay;
+        const dot = vLx*vRx + vLy*vRy;
+        const magL = Math.hypot(vLx, vLy), magR = Math.hypot(vRx, vRy);
+        if (Math.abs(dot) <= 0.02 * magL * magR) { ay -= 8; }
+
+        footX = ax;
+      } else if (type === 'right') {
+        // Right angle at left base endpoint; altitude overlaps vertical leg
+        ax = x0; ay = y0 - Hpx;
+        footX = x0;
+        rightMarkerAt = { x: x0, y: y0 };
+      } else if (type === 'obtuse') {
+        // Obtuse at right base endpoint by placing apex beyond x1
+        const dx = 0.25 + 0.45 * rng(); // 25%–70% beyond the base
+        ax = x1 + dx * Bpx;
+        ay = y0 - Hpx;
+        footX = ax; // projection outside segment
+        showBaseExtension = true;
+        // Expand canvas to fit apex and altitude
+        const extra = (ax + margin) - width;
+        if (extra > 0) width += extra;
+      }
+
+      const area = 0.5 * base * height;
+
+      // Build SVG
+      const parts = [];
+      parts.push(`<svg viewBox="0 0 ${width} ${heightPx}" xmlns="http://www.w3.org/2000/svg" aria-label="Triangle diagram">`);
+
+      // Triangle polygon
+      parts.push(`<polygon points="${x0},${y0} ${x1},${y1} ${ax},${ay}" fill="#f7f9ff" stroke="#333" stroke-width="1.5"/>`);
+
+      // Base extension (for obtuse)
+      if (showBaseExtension) {
+        parts.push(`<line x1="${x1}" y1="${y1}" x2="${Math.max(footX, x1)+12}" y2="${y1}" stroke="#aaa" stroke-dasharray="6,5" />`);
+      }
+
+      // Altitude (dashed)
+      parts.push(`<line x1="${ax}" y1="${ay}" x2="${footX}" y2="${y0}" stroke="#555" stroke-dasharray="5,4" stroke-width="1.5"/>`);
+
+      // --- Right-angle marker: ONLY for right triangles ---
+      if (rightMarkerAt) {
+        const m = 12;
+        const rx = rightMarkerAt.x, ry = rightMarkerAt.y;
+        parts.push(
+          `<path d="M ${rx} ${ry} l 0 -${m} l ${m} 0 l 0 ${m} Z"
+             fill="none" stroke="#555" stroke-width="1.2"
+             stroke-linecap="square" stroke-linejoin="miter"/>`
+        );
+      }
+      /* No marker drawn for acute or obtuse triangles */
+
+      // ----- Dimension lines with TICKS (no arrows) -----
+      const tick = 6;
+
+      // Base dimension line + ticks
+      const dimY = y0 + 8;
+      parts.push(`<line x1="${x0}" y1="${dimY}" x2="${x1}" y2="${dimY}" stroke="#888" stroke-width="1"/>`);
+      parts.push(`<line x1="${x0}" y1="${dimY - tick}" x2="${x0}" y2="${dimY + tick}" stroke="#888" stroke-width="1"/>`);
+      parts.push(`<line x1="${x1}" y1="${dimY - tick}" x2="${x1}" y2="${dimY + tick}" stroke="#888" stroke-width="1"/>`);
+      parts.push(`<text x="${(x0+x1)/2}" y="${dimY + 14}" font-size="12" text-anchor="middle" fill="#222">b = ${base} cm</text>`);
+
+      // Height dimension line + ticks
+      const hx = footX - 8;
+      parts.push(`<line x1="${hx}" y1="${ay}" x2="${hx}" y2="${y0}" stroke="#888" stroke-width="1"/>`);
+      parts.push(`<line x1="${hx - tick}" y1="${ay}" x2="${hx + tick}" y2="${ay}" stroke="#888" stroke-width="1"/>`);
+      parts.push(`<line x1="${hx - tick}" y1="${y0}" x2="${hx + tick}" y2="${y0}" stroke="#888" stroke-width="1"/>`);
+      const labelX = Math.max(6, hx - 2);
+      parts.push(`<text x="${labelX}" y="${(ay+y0)/2}" font-size="12" text-anchor="end" dominant-baseline="middle" fill="#222">h = ${height} cm</text>`);
+
+      parts.push(`</svg>`);
+      const svg = parts.join("");
+
+      return { base, height, area, svg, type };
+    }
+
+    function makeProblems(rng, allowed, n, ranges, wantIntegerArea) {
+      const arr = [];
+      for (let i=0;i<n;i++) {
+        const t = choose(rng, allowed);
+        arr.push(makeTriangleProblem(rng, t, ranges, wantIntegerArea));
+      }
+      return arr;
+    }
+
+    // ---------- rendering ----------
+    const grid = document.getElementById('grid');
+    function render(problems) {
+      grid.innerHTML = '';
+      problems.forEach((p, i) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const typeBadge = p.type.charAt(0).toUpperCase() + p.type.slice(1);
+        card.innerHTML = `
+          <div class="qhead">
+            <div class="qidx">Q${i+1} <span class="units">(${typeBadge})</span></div>
+            <div class="units">A = ½·b·h</div>
+          </div>
+          ${p.svg}
+          <div class="answer">
+            <label for="ans-${i}" class="units">Area (cm²)</label>
+            <input id="ans-${i}" type="number" step="1" inputmode="numeric" class="ans" placeholder="Enter area">
+            <div class="result" aria-live="polite"></div>
+          </div>
+          <div class="key">Answer: <strong>${p.area}</strong> cm²</div>
+        `;
+        card.dataset.answer = p.area;
+        grid.appendChild(card);
+      });
+    }
+
+    // ---------- interactions ----------
+    const regenBtn = document.getElementById('regen');
+    const checkBtn = document.getElementById('check');
+    const clearBtn = document.getElementById('clear');
+    const printBtn = document.getElementById('print');
+    const toggleKey = document.getElementById('toggleKey');
+    const seedInput = document.getElementById('seed');
+    const seedEcho = document.getElementById('seedEcho');
+
+    const incAcute = document.getElementById('incAcute');
+    const incRight = document.getElementById('incRight');
+    const incObtuse = document.getElementById('incObtuse');
+
+    const countEl = document.getElementById('count');
+    const baseMinEl = document.getElementById('baseMin');
+    const baseMaxEl = document.getElementById('baseMax');
+    const heightMinEl = document.getElementById('heightMin');
+    const heightMaxEl = document.getElementById('heightMax');
+    const intAreaEl = document.getElementById('intArea');
+
+    const typeWarning = document.getElementById('typeWarning');
+    const rangeWarning = document.getElementById('rangeWarning');
+
+    function currentAllowed() {
+      const allowed = [];
+      if (incAcute.checked) allowed.push('acute');
+      if (incRight.checked) allowed.push('right');
+      if (incObtuse.checked) allowed.push('obtuse');
+      return allowed;
+    }
+
+    function readRangesAndCount() {
+      let count = Math.max(1, Math.min(60, intVal(countEl, 12)));
+      let bMin = Math.max(1, intVal(baseMinEl, 8));
+      let bMax = Math.max(1, intVal(baseMaxEl, 30));
+      let hMin = Math.max(1, intVal(heightMinEl, 6));
+      let hMax = Math.max(1, intVal(heightMaxEl, 24));
+      if (bMin > bMax) [bMin, bMax] = [bMax, bMin];
+      if (hMin > hMax) [hMin, hMax] = [hMax, hMin];
+      baseMinEl.value = bMin; baseMaxEl.value = bMax; heightMinEl.value = hMin; heightMaxEl.value = hMax; countEl.value = count;
+      return { count, bMin, bMax, hMin, hMax };
+    }
+
+    function generate() {
+      const allowed = currentAllowed();
+      if (allowed.length === 0) { typeWarning.style.display = 'block'; return; }
+      typeWarning.style.display = 'none';
+
+      const { count, bMin, bMax, hMin, hMax } = readRangesAndCount();
+      rangeWarning.style.display = (bMin < 1 || hMin < 1) ? 'block' : 'none';
+
+      const seed = seedInput.value;
+      const rng = rngFromSeed(seed);
+      seedEcho.textContent = seed ? `(seed ${seed})` : '';
+
+      const probs = makeProblems(rng, allowed, count, { bMin, bMax, hMin, hMax }, intAreaEl.checked);
+      render(probs);
+      if (toggleKey.checked) showKeys(true);
+    }
+
+    function checkAnswers() {
+      grid.querySelectorAll('.card').forEach(card => {
+        const ansEl = card.querySelector('.ans');
+        const resEl = card.querySelector('.result');
+        const correct = Number(card.dataset.answer);
+        const val = Number(ansEl.value);
+        if (Number.isFinite(val) && within(val, correct, 0.5, 0.01)) {
+          resEl.textContent = '✓'; resEl.className = 'result ok';
+        } else {
+          resEl.textContent = '✗'; resEl.className = 'result bad';
+        }
+        resEl.style.display = 'block';
+      });
+    }
+
+    function clearAnswers() {
+      grid.querySelectorAll('.ans').forEach(i => i.value = '');
+      grid.querySelectorAll('.result').forEach(r => { r.style.display='none'; r.textContent=''; r.className='result'; });
+    }
+
+    function showKeys(show) {
+      grid.querySelectorAll('.key').forEach(k => k.style.display = show ? 'block' : 'none');
+    }
+
+    // Events
+    regenBtn.addEventListener('click', generate);
+    checkBtn.addEventListener('click', checkAnswers);
+    clearBtn.addEventListener('click', clearAnswers);
+    printBtn.addEventListener('click', () => window.print());
+    toggleKey.addEventListener('change', e => showKeys(e.target.checked));
+
+    [seedInput, incAcute, incRight, incObtuse, countEl, baseMinEl, baseMaxEl, heightMinEl, heightMaxEl, intAreaEl]
+      .forEach(el => el.addEventListener('change', generate));
+
+    // initial
+    generate();
+  </script>
+</body>
+</html>

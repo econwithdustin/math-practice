@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Right-angle Polygon Areas</title>
+<style>
+  :root{--ink:#111;--muted:#666;--ok:#2e7d32;--bad:#c62828;--line:#ddd;}
+  *{box-sizing:border-box}
+  body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);margin:0;padding:24px;background:#fbfbfb}
+  #container{max-width:1100px;margin:0 auto}
+  h1{margin:0 0 8px}
+  .lead{color:var(--muted);margin:0 0 16px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0 16px}
+  .toolbar label{display:flex;align-items:center;gap:8px;color:var(--muted)}
+  .toolbar input[type=number], .toolbar select{width:130px;padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff;font:inherit}
+  .toolbar button{padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;font:inherit}
+  .toolbar button:hover{background:#f1f1f1}
+  .grid{display:grid;grid-template-columns:repeat(3,minmax(300px,1fr));gap:14px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+  .qhead{display:flex;justify-content:space-between;align-items:baseline}
+  .units{font-size:12px;color:var(--muted)}
+  .shapeWrap{display:flex;justify-content:center}
+  .shapeBox{width:200px;height:200px}
+  svg{width:200px;height:200px;display:block}
+  .answer{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+  .answer input[type=number]{padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .result{min-width:26px;text-align:right;font-weight:700;display:none}
+  .ok{color:var(--ok)} .bad{color:var(--bad)}
+  .key{display:none;color:var(--muted);font-size:13px}
+  .key strong{color:var(--ink)}
+  @media print{
+    .toolbar{display:none!important}
+    body{background:#fff;padding:0}
+    #container{max-width:100%;margin:0 18px}
+    .card{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<div id="container">
+  <h1>Right-Angle Polygon Area</h1>
+  <p class="lead">Each figure is a union of 1–3 rectangles (only right angles). Drawings preserve the shape’s proportions and fit a 200×200 cell. <strong>Outer sides are labeled at their midpoints.</strong> Shared edges are dotted. Find the total area.</p>
+
+  <div class="toolbar">
+    <label>Max side length
+      <input id="maxSide" type="number" value="20" min="4" max="100" step="1">
+    </label>
+    <label>Complexity (rectangles)
+      <select id="complexity">
+        <option value="1">1 (single rectangle)</option>
+        <option value="2" selected>2</option>
+        <option value="3">3</option>
+      </select>
+    </label>
+    <button id="regen">Generate</button>
+    <button id="check">Check Answers</button>
+    <button id="clear">Clear</button>
+    <button id="print">Print</button>
+    <label><input type="checkbox" id="showKey"> Show Answer Key</label>
+    <label>Seed <input id="seed" type="number" placeholder="(optional)"></label>
+    <span id="seedEcho" class="units"></span>
+  </div>
+
+  <div id="grid" class="grid"></div>
+</div>
+
+<script>
+/* ========= Utilities ========= */
+function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296}}
+function rngFromSeed(seed){return (seed==null||seed==='')?Math.random:mulberry32((Number(seed)>>>0)||0)}
+const randint=(r,min,max)=>Math.floor(r()*(max-min+1))+min;
+
+/* ========= Geometry primitives ========= */
+// Rect {x,y,w,h} in cm (axis-aligned, integer)
+function rectsOverlap(a,b){
+  return !(a.x+a.w <= b.x || b.x+b.w <= a.x || a.y+a.h <= b.y || b.y+b.h <= a.y);
+}
+function placeAdjacent(rng, host, maxLen, existing){
+  for(let tries=0; tries<60; tries++){
+    const side = randint(rng,0,3); // 0:left,1:right,2:top,3:bottom
+    const w = randint(rng, 2, maxLen);
+    const h = randint(rng, 2, maxLen);
+    let r = {x:0,y:0,w,h};
+    if(side===0){ // left
+      const y0 = randint(rng, host.y, host.y+host.h - h);
+      r.x = host.x - w; r.y = y0;
+    } else if(side===1){ // right
+      const y0 = randint(rng, host.y, host.y+host.h - h);
+      r.x = host.x + host.w; r.y = y0;
+    } else if(side===2){ // top
+      const x0 = randint(rng, host.x, host.x+host.w - w);
+      r.x = x0; r.y = host.y - h;
+    } else { // bottom
+      const x0 = randint(rng, host.x, host.x+host.w - w);
+      r.x = x0; r.y = host.y + host.h;
+    }
+    let ok = true;
+    for(const e of existing){ if(rectsOverlap(r,e)){ ok=false; break; } }
+    if(ok) return r;
+  }
+  // fallback
+  return {x: host.x + host.w, y: host.y, w: Math.max(2, Math.min(6,maxLen)), h: Math.max(2, Math.min(host.h, maxLen))};
+}
+
+function buildRectUnion(rng, complexity, maxLen){
+  const base = {x:0, y:0, w: randint(rng, 3, maxLen), h: randint(rng, 3, maxLen)};
+  const rects=[base];
+  if(complexity>=2) rects.push(placeAdjacent(rng, base, maxLen, rects));
+  if(complexity>=3) rects.push(placeAdjacent(rng, rects[randint(rng,0,rects.length-1)], maxLen, rects));
+  // Shift to positive coords
+  const minX = Math.min(...rects.map(r=>r.x)), minY = Math.min(...rects.map(r=>r.y));
+  rects.forEach(r=>{ r.x -= minX; r.y -= minY; });
+  return rects;
+}
+
+/* ========= Shared-edge detection & outer-edge extraction ========= */
+// Edge object: {type:'h'|'v', coord:number, from:number, to:number, orient:'top'|'bottom'|'left'|'right'}
+function rectEdges(r){
+  return [
+    {type:'h', coord:r.y,          from:r.x,        to:r.x+r.w, orient:'top'},
+    {type:'h', coord:r.y+r.h,      from:r.x,        to:r.x+r.w, orient:'bottom'},
+    {type:'v', coord:r.x,          from:r.y,        to:r.y+r.h, orient:'left'},
+    {type:'v', coord:r.x+r.w,      from:r.y,        to:r.y+r.h, orient:'right'}
+  ];
+}
+
+// Find interior shared segments by pairwise adjacency; returns array of {type,coord,from,to}
+function findSharedSegments(rects){
+  const segs=[];
+  for(let i=0;i<rects.length;i++){
+    for(let j=i+1;j<rects.length;j++){
+      const a=rects[i], b=rects[j];
+      // vertical shared side
+      if(a.x + a.w === b.x || b.x + b.w === a.x){
+        const x = (a.x + a.w === b.x) ? b.x : a.x;
+        const y1 = Math.max(a.y, b.y), y2 = Math.min(a.y+a.h, b.y+b.h);
+        if(y2>y1) segs.push({type:'v', coord:x, from:y1, to:y2});
+      }
+      // horizontal shared side
+      if(a.y + a.h === b.y || b.y + b.h === a.y){
+        const y = (a.y + a.h === b.y) ? b.y : a.y;
+        const x1 = Math.max(a.x, b.x), x2 = Math.min(a.x+a.w, b.x+b.w);
+        if(x2>x1) segs.push({type:'h', coord:y, from:x1, to:x2});
+      }
+    }
+  }
+  return segs;
+}
+
+function keyLine(t,c){ return `${t}@${c}`; }
+function mergeIntervals(intervals){
+  if(intervals.length===0) return [];
+  intervals.sort((a,b)=>a[0]-b[0] || a[1]-b[1]);
+  const out=[[...intervals[0]]];
+  for(let i=1;i<intervals.length;i++){
+    const [s,e]=intervals[i], last=out[out.length-1];
+    if(s<=last[1]){ last[1]=Math.max(last[1],e); }
+    else if(Math.abs(s-last[1])<1e-9){ last[1]=e; } // join touching
+    else out.push([s,e]);
+  }
+  return out;
+}
+function subtractIntervals(baseStart, baseEnd, overlaps){
+  if(overlaps.length===0) return [[baseStart, baseEnd]];
+  const sorted = mergeIntervals(overlaps.map(o=>[Math.max(o[0],baseStart), Math.min(o[1],baseEnd)]))
+                 .filter(([s,e])=>e>s);
+  const result=[];
+  let cur = baseStart;
+  for(const [s,e] of sorted){
+    if(s>cur) result.push([cur,s]);
+    cur = Math.max(cur,e);
+  }
+  if(cur<baseEnd) result.push([cur,baseEnd]);
+  return result;
+}
+
+/* Build outer (solid) and interior (dotted) line segments from rectangles */
+function buildEdges(rects){
+  const shared = findSharedSegments(rects); // interior dotted
+  const sharedByKey = new Map();
+  for(const s of shared){
+    const k = keyLine(s.type,s.coord);
+    if(!sharedByKey.has(k)) sharedByKey.set(k,[]);
+    sharedByKey.get(k).push([s.from,s.to]);
+  }
+
+  const outerPieces=[]; // {type,coord,from,to, orient}
+  const allEdges=[]; // for merging interiors later
+  // For each rectangle edge: subtract shared parts -> remaining are outer
+  for(const r of rects){
+    for(const e of rectEdges(r)){
+      const k = keyLine(e.type,e.coord);
+      const overlaps = sharedByKey.get(k)||[];
+      const pieces = subtractIntervals(e.from, e.to, overlaps);
+      for(const p of pieces){
+        outerPieces.push({type:e.type, coord:e.coord, from:p[0], to:p[1], orient:e.orient});
+      }
+      // (also keep the full raw edge for later interior merging)
+      allEdges.push({type:e.type, coord:e.coord, from:e.from, to:e.to});
+    }
+  }
+
+  // Merge outer pieces along the same line (type+coord), preserving orientation from first piece
+  const mergedOuter=[];
+  const bucketsOut = new Map();
+  for(const p of outerPieces){
+    const k = keyLine(p.type,p.coord)+'|'+p.orient;
+    if(!bucketsOut.has(k)) bucketsOut.set(k, []);
+    bucketsOut.get(k).push([p.from,p.to]);
+  }
+  for(const [k,arr] of bucketsOut.entries()){
+    const [line, orient] = k.split('|'); const [type,coordStr]=line.split('@'); const coord=Number(coordStr);
+    const merged = mergeIntervals(arr);
+    for(const [s,e] of merged){
+      mergedOuter.push({type, coord, from:s, to:e, orient});
+    }
+  }
+
+  // Merge interior (shared) segments along same line
+  const mergedInterior=[];
+  const bucketsIn = new Map();
+  for(const s of shared){
+    const k = keyLine(s.type,s.coord);
+    if(!bucketsIn.has(k)) bucketsIn.set(k, []);
+    bucketsIn.get(k).push([s.from,s.to]);
+  }
+  for(const [k,arr] of bucketsIn.entries()){
+    const [type,coordStr]=k.split('@'); const coord=Number(coordStr);
+    const merged = mergeIntervals(arr);
+    for(const [s,e] of merged){
+      mergedInterior.push({type, coord, from:s, to:e});
+    }
+  }
+
+  return {outer: mergedOuter, interior: mergedInterior};
+}
+
+/* ========= Drawing (200×200 cell, proportional per problem) ========= */
+function drawUnionSVG(rects){
+  // Bounding box (cm)
+  const minX = 0, minY = 0;
+  const maxX = Math.max(...rects.map(r=>r.x+r.w));
+  const maxY = Math.max(...rects.map(r=>r.y+r.h));
+  const widthCm = maxX - minX, heightCm = maxY - minY;
+
+  // Fixed cell scaling
+  const CELL = 200, PAD = 18;
+  const innerW = CELL - 2*PAD, innerH = CELL - 2*PAD;
+  const scale = Math.min(innerW / widthCm, innerH / heightCm);
+  const ox = (CELL - widthCm*scale)/2 - minX*scale;
+  const oy = (CELL - heightCm*scale)/2 - minY*scale;
+
+  // Draw fills first (no strokes) so we see a single region
+  const fills = rects.map(r=>{
+    return `<rect x="${ox + r.x*scale}" y="${oy + r.y*scale}" width="${r.w*scale}" height="${r.h*scale}" fill="#eef5ff" stroke="none"/>`;
+  }).join("");
+
+  // Build edges
+  const {outer, interior} = buildEdges(rects);
+
+  // Draw interior (dotted) shared edges
+  const dotted = interior.map(s=>{
+    if(s.type==='h'){
+      const x1 = ox + s.from*scale, x2 = ox + s.to*scale, y = oy + s.coord*scale;
+      return `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#666" stroke-width="1.2" stroke-dasharray="6 4"/>`;
+    } else {
+      const y1 = oy + s.from*scale, y2 = oy + s.to*scale, x = ox + s.coord*scale;
+      return `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="#666" stroke-width="1.2" stroke-dasharray="6 4"/>`;
+    }
+  }).join("");
+
+  // Draw outer (solid) edges and labels at midpoints, oriented along the side
+  const labelOffset = 10;
+  const solids = [];
+  const labels = [];
+  for(const s of outer){
+    const len = Math.abs(s.to - s.from);
+    if(len<=0) continue;
+    if(s.type==='h'){
+      const x1 = ox + s.from*scale, x2 = ox + s.to*scale, y = oy + s.coord*scale;
+      solids.push(`<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#333" stroke-width="1.6"/>`);
+      const mx = (x1+x2)/2, my = y + (s.orient==='top' ? -labelOffset : labelOffset);
+      labels.push(`<text x="${mx}" y="${my}" font-size="11" text-anchor="middle" fill="#222">${len} cm</text>`);
+    }else{ // vertical
+      const y1 = oy + s.from*scale, y2 = oy + s.to*scale, x = ox + s.coord*scale;
+      solids.push(`<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="#333" stroke-width="1.6"/>`);
+      const mx = x + (s.orient==='left' ? -labelOffset : labelOffset), my = (y1+y2)/2;
+      labels.push(`<text x="${mx}" y="${my}" font-size="11" text-anchor="middle" fill="#222" transform="rotate(-90, ${mx}, ${my})">${len} cm</text>`);
+    }
+  }
+
+  return `<svg viewBox="0 0 ${CELL} ${CELL}" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+    ${fills}
+    ${dotted}
+    ${solids.join("")}
+    ${labels.join("")}
+  </svg>`;
+}
+
+/* ========= Problems ========= */
+function makeProblem(rng, maxLen, complexity){
+  const rects = buildRectUnion(rng, complexity, maxLen);
+  const area = rects.reduce((s,r)=>s + r.w*r.h, 0);
+  return { rects, area, svg: drawUnionSVG(rects) };
+}
+function makeSet(rng, count, maxLen, complexity){
+  const arr=[]; for(let i=0;i<count;i++) arr.push(makeProblem(rng, maxLen, complexity));
+  return arr;
+}
+
+/* ========= Rendering ========= */
+const grid = document.getElementById('grid');
+function render(problems){
+  grid.innerHTML = '';
+  problems.forEach((p, i)=>{
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="qhead">
+        <strong>Q${i+1}</strong>
+        <span class="units">Add areas (cm²)</span>
+      </div>
+      <div class="shapeWrap"><div class="shapeBox">${p.svg}</div></div>
+      <div class="answer">
+        <input type="number" class="ans" placeholder="Enter area (cm²)" step="1" inputmode="numeric">
+        <div class="result"></div>
+      </div>
+      <div class="key">Answer: <strong>${p.area}</strong> cm²</div>
+    `;
+    card.dataset.answer = p.area;
+    grid.appendChild(card);
+  });
+}
+
+/* ========= Interactions ========= */
+const maxSideEl = document.getElementById('maxSide');
+const complexityEl = document.getElementById('complexity');
+const regenBtn = document.getElementById('regen');
+const checkBtn = document.getElementById('check');
+const clearBtn = document.getElementById('clear');
+const printBtn = document.getElementById('print');
+const showKey = document.getElementById('showKey');
+const seedInput = document.getElementById('seed');
+const seedEcho = document.getElementById('seedEcho');
+
+function generate(){
+  const maxLen = Math.max(4, Math.min(100, parseInt(maxSideEl.value||'20',10)));
+  const complexity = Math.max(1, Math.min(3, parseInt(complexityEl.value||'2',10)));
+  maxSideEl.value = maxLen;
+  complexityEl.value = complexity;
+  const seed = seedInput.value;
+  const rng = rngFromSeed(seed);
+  seedEcho.textContent = seed ? `(seed ${seed})` : '';
+  const problems = makeSet(rng, 12, maxLen, complexity);
+  render(problems);
+  document.querySelectorAll('.result').forEach(r=>{r.style.display='none'; r.textContent=''; r.className='result';});
+  document.querySelectorAll('.key').forEach(k=>k.style.display = showKey.checked ? 'block' : 'none');
+}
+
+function checkAnswers(){
+  grid.querySelectorAll('.card').forEach(card=>{
+    const ansEl = card.querySelector('.ans');
+    const resEl = card.querySelector('.result');
+    const correct = Number(card.dataset.answer);
+    const val = Number(ansEl.value);
+    if(Number.isFinite(val) && val === correct){
+      resEl.textContent = '✓'; resEl.className = 'result ok';
+    }else{
+      resEl.textContent = '✗'; resEl.className = 'result bad';
+    }
+    resEl.style.display = 'block';
+  });
+}
+function clearAnswers(){
+  grid.querySelectorAll('.ans').forEach(i=>i.value='');
+  grid.querySelectorAll('.result').forEach(r=>{r.style.display='none'; r.textContent=''; r.className='result';});
+}
+
+regenBtn.addEventListener('click', generate);
+checkBtn.addEventListener('click', checkAnswers);
+clearBtn.addEventListener('click', clearAnswers);
+printBtn.addEventListener('click', ()=>window.print());
+showKey.addEventListener('change', ()=>document.querySelectorAll('.key').forEach(k=>k.style.display = showKey.checked?'block':'none'));
+seedInput.addEventListener('change', generate);
+maxSideEl.addEventListener('change', generate);
+complexityEl.addEventListener('change', generate);
+
+/* initial */
+generate();
+</script>
+</body>
+</html>
